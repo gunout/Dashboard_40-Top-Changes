@@ -88,6 +88,32 @@ st.markdown("""
     .category-minor { background: linear-gradient(135deg, #43A047, #66BB6A); }
     .category-exotic { background: linear-gradient(135deg, #FB8C00, #FFA726); }
     .category-crypto { background: linear-gradient(135deg, #8E24AA, #AB47BC); }
+    .simulator-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .profit-loss-positive {
+        background-color: rgba(40, 167, 69, 0.2);
+        color: #28a745;
+        border: 2px solid #28a745;
+        padding: 1rem;
+        border-radius: 10px;
+        font-weight: bold;
+        text-align: center;
+    }
+    .profit-loss-negative {
+        background-color: rgba(220, 53, 69, 0.2);
+        color: #dc3545;
+        border: 2px solid #dc3545;
+        padding: 1rem;
+        border-radius: 10px;
+        font-weight: bold;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -705,6 +731,30 @@ class ForexDashboard:
                 # Mise à jour du volume
                 self.current_data.loc[idx, 'volume_journalier'] *= random.uniform(0.8, 1.2)
     
+    def calculate_rsi(self, prices, period=14):
+        """Calcule le RSI (Relative Strength Index)"""
+        delta = prices.diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        return rsi
+    
+    def calculate_bollinger_bands(self, prices, period=20, std_dev=2):
+        """Calcule les bandes de Bollinger"""
+        sma = prices.rolling(window=period).mean()
+        std = prices.rolling(window=period).std()
+        
+        upper_band = sma + (std * std_dev)
+        lower_band = sma - (std * std_dev)
+        
+        return upper_band, lower_band
+    
     def display_header(self):
         """Affiche l'en-tête du dashboard"""
         st.markdown(
@@ -863,7 +913,7 @@ class ForexDashboard:
                          title=f'Évolution des Taux de Change ({period})',
                          color_discrete_sequence=px.colors.qualitative.Bold)
             fig.update_layout(yaxis_title="Taux de Change")
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab2:
             # Analyse par catégorie
@@ -872,7 +922,7 @@ class ForexDashboard:
                         y='prix',
                         title='Distribution des Taux par Catégorie',
                         color='categorie')
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab3:
             col1, col2 = st.columns(2)
@@ -886,7 +936,7 @@ class ForexDashboard:
                             title='Volatilité Historique Moyenne (%)',
                             color='symbole',
                             color_discrete_sequence=px.colors.qualitative.Bold)
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             with col2:
                 # Volatilité récente (30 derniers jours)
@@ -902,7 +952,7 @@ class ForexDashboard:
                                title='Volatilité Récente (30 jours)',
                                color='symbole',
                                size_max=40)
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
         
         with tab4:
             # Performance relative
@@ -926,7 +976,7 @@ class ForexDashboard:
                         color='categorie',
                         title='Performance Totale depuis 2020 (%)',
                         color_discrete_sequence=px.colors.qualitative.Bold)
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     def create_central_bank_analysis(self):
         """Analyse des banques centrales"""
@@ -1042,7 +1092,7 @@ class ForexDashboard:
                         color='Taux Directeur',
                         color_continuous_scale='RdYlGn_r')
             fig.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab3:
             st.subheader("Interventions Récentes sur le Marché des Changes")
@@ -1128,483 +1178,429 @@ class ForexDashboard:
                 fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
                 
                 fig.update_layout(height=800, title_text=f"Analyse Technique - {devise_selectionnee}")
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
         
         with tab2:
-            st.subheader("Patterns de Trading Identifiés")
+            st.subheader("Patterns de Trading Courants")
+            
+            patterns_data = {
+                'Pattern': ['Head & Shoulders', 'Double Top/Bottom', 'Triangle', 'Flag/Pennant', 'Wedge'],
+                'Fréquence': [15, 20, 25, 18, 12],
+                'Fiabilité': [75, 80, 65, 70, 60],
+                'Type': ['Renversement', 'Renversement', 'Continuation', 'Continuation', 'Renversement']
+            }
+            
+            patterns_df = pd.DataFrame(patterns_data)
             
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("""
-                ### 📈 Patterns Haussiers
-                
-                **🔺 Double Bottom (EUR/USD):**
-                - Support solide à 1.0750
-                - Rebond technique confirmé
-                - Objectif: 1.0950
-                
-                **🔼 Triangle Ascendant (GBP/USD):**
-                - Consolidation haussière
-                - Rupture imminente
-                - Volume croissant
-                
-                **🚀 Breakout (USD/JPY):**
-                - Résistance franchie à 156.00
-                - Momentum positif
-                - Retest réussi
-                """)
+                fig = px.bar(patterns_df, 
+                           x='Pattern', 
+                           y='Fréquence',
+                           title='Fréquence des Patterns (%)',
+                           color='Type')
+                st.plotly_chart(fig, use_container_width=True)
             
             with col2:
-                st.markdown("""
-                ### 📉 Patterns Baissiers
-                
-                **🔻 Double Top (AUD/USD):**
-                - Résistance à 0.6800
-                - Échec de rupture
-                - Objectif: 0.6500
-                
-                **🔽 Tête et Épaules (USD/CAD):**
-                - Pattern de retournement
-                - Volume de distribution
-                - Ligne cou brisée
-                
-                **📉 Channel Descendant (NZD/USD):**
-                - Série de plus bas
-                - Résistance descendante
-                - Momentum négatif
-                """)
+                fig = px.scatter(patterns_df, 
+                               x='Pattern', 
+                               y='Fiabilité',
+                               size='Fréquence',
+                               title='Fiabilité des Patterns (%)',
+                               color='Type',
+                               size_max=40)
+                st.plotly_chart(fig, use_container_width=True)
         
         with tab3:
-            st.subheader("Signaux de Trading")
+            st.subheader("Signaux de Trading Actuels")
             
-            # Génération de signaux simulés
-            signaux = []
+            # Simulation de signaux
+            signals = []
             for symbole in self.currencies.keys():
                 signal_type = random.choice(['ACHAT', 'VENTE', 'NEUTRE'])
-                force = random.randint(60, 95)
-                horizon = random.choice(['Court terme', 'Moyen terme', 'Long terme'])
+                strength = random.randint(1, 10)
+                reason = random.choice([
+                    'Surachat RSI', 'Survente RSI', 'Croissance MM20/50', 
+                    'Bande Bollinger', 'Support/Résistance', 'Volume élevé'
+                ])
                 
-                signaux.append({
-                    'Paire': symbole,
-                    'Signal': signal_type,
-                    'Force': f"{force}%",
-                    'Horizon': horizon,
-                    'Prix Cible': self.current_data[self.current_data['symbole'] == symbole]['prix'].iloc[0] * 
-                                 random.uniform(0.98, 1.02)
-                })
-            
-            signaux_df = pd.DataFrame(signaux)
-            st.dataframe(signaux_df, width='stretch')
-    
-    def calculate_rsi(self, prices, window=14):
-        """Calcule le RSI"""
-        delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-    
-    def calculate_bollinger_bands(self, prices, window=20, num_std=2):
-        """Calcule les bandes de Bollinger"""
-        rolling_mean = prices.rolling(window=window).mean()
-        rolling_std = prices.rolling(window=window).std()
-        upper_band = rolling_mean + (rolling_std * num_std)
-        lower_band = rolling_mean - (rolling_std * num_std)
-        return upper_band, lower_band
-    
-    def create_market_analysis(self):
-        """Analyse des marchés mondiaux"""
-        st.markdown('<h3 class="section-header">🌍 ANALYSE DES MARCHÉS MONDIAUX</h3>', 
-                   unsafe_allow_html=True)
-        
-        tab1, tab2 = st.tabs(["Indices de Devises", "Analyse Macro"])
-        
-        with tab1:
-            st.subheader("Performances des Indices de Devises")
-            
-            cols = st.columns(4)
-            indices_list = list(self.market_data['indices'].items())
-            
-            for i, (indice, data) in enumerate(indices_list):
-                with cols[i % 4]:
-                    data['change'] = random.uniform(-1.5, 1.5)  # Mise à jour simulée
-                    st.metric(
-                        indice,
-                        f"{data['valeur']:.1f}",
-                        f"{data['change']:+.2f}%",
-                        delta_color="normal"
-                    )
-        
-        with tab2:
-            st.subheader("Indicateurs Macroéconomiques")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("""
-                ### 🇺🇸 Économie Américaine
-                
-                **📊 Inflation:** 3.2% (cible: 2.0%)
-                **💵 Taux Directeurs:** 5.25%-5.50%
-                **📈 Croissance PIB:** 2.1%
-                **👥 Chômage:** 3.8%
-                **🏦 Solde Commercial:** -$900B
-                
-                ### 🇪🇺 Zone Euro
-                
-                **📊 Inflation:** 2.4% (cible: 2.0%)
-                **💵 Taux Directeurs:** 4.5%
-                **📈 Croissance PIB:** 0.5%
-                **👥 Chômage:** 6.5%
-                **🏦 Solde Commercial:** +€250B
-                """)
-            
-            with col2:
-                st.markdown("""
-                ### 🌍 Économie Mondiale
-                
-                **📊 Croissance Mondiale:** 3.1%
-                **💱 Volume Forex:** $7.5T/jour
-                **📦 Commerce Mondial:** +1.7%
-                **🏦 Dettes Souveraines:** 275% du PIB mondial
-                
-                ### 💡 Facteurs d'Influence
-                
-                **🛢️ Prix des Matières Premières:**
-                - Pétrole: $85/baril
-                - Or: $1950/once
-                - Cuivre: $3.85/livre
-                
-                **🌐 Tensions Géopolitiques:**
-                - Conflits en Ukraine et Moyen-Orient
-                - Tensions commerciales sino-américaines
-                """)
-    
-    def create_risk_analysis(self):
-        """Analyse des risques"""
-        st.markdown('<h3 class="section-header">⚠️ ANALYSE DES RISQUES</h3>', 
-                   unsafe_allow_html=True)
-        
-        tab1, tab2, tab3 = st.tabs(["Risques par Devise", "Stress Tests", "Stratégies de Couverture"])
-        
-        with tab1:
-            st.subheader("Évaluation des Risques par Paire de Devises")
-            
-            risk_data = []
-            for symbole, info in self.currencies.items():
-                risk_score = random.randint(25, 85)
-                risk_level = "FAIBLE" if risk_score < 40 else "MOYEN" if risk_score < 70 else "ÉLEVÉ"
-                
-                risk_data.append({
-                    'Paire': info['nom'],
+                signals.append({
                     'Symbole': symbole,
-                    'Score Risque': risk_score,
-                    'Niveau': risk_level,
-                    'Risque Géopolitique': random.randint(20, 90),
-                    'Risque Économique': random.randint(15, 80),
-                    'Risque de Liquidité': random.randint(10, 60)
+                    'Signal': signal_type,
+                    'Force': strength,
+                    'Raison': reason
                 })
             
-            risk_df = pd.DataFrame(risk_data)
-            st.dataframe(risk_df, width='stretch')
+            signals_df = pd.DataFrame(signals)
+            
+            # Filtrer les signaux forts
+            strong_signals = signals_df[signals_df['Force'] >= 7].sort_values('Force', ascending=False)
+            
+            if not strong_signals.empty:
+                st.write("### 🚨 Signaux Forts (Force ≥ 7)")
+                for _, signal in strong_signals.iterrows():
+                    signal_class = "profit-loss-positive" if signal['Signal'] == 'ACHAT' else "profit-loss-negative"
+                    st.markdown(f"""
+                    <div class="{signal_class}">
+                        <strong>{signal['Symbole']}</strong> - {signal['Signal']} (Force: {signal['Force']}/10)<br>
+                        Raison: {signal['Raison']}
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("Aucun signal fort détecté actuellement.")
+            
+            # Tableau complet des signaux
+            st.write("### 📋 Tous les Signaux")
+            st.dataframe(signals_df, use_container_width=True)
+    
+    def create_trading_simulator(self):
+        """Simulateur de trading"""
+        st.markdown('<h3 class="section-header">🎮 SIMULATEUR DE TRADING</h3>', 
+                   unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.subheader("Ouvrir une Position")
+            
+            # Sélection de la paire
+            pair = st.selectbox("Paire de devises:", list(self.currencies.keys()))
+            
+            # Type de position
+            position_type = st.radio("Type de position:", ['ACHAT (Long)', 'VENTE (Short)'])
+            
+            # Paramètres de la position
+            col_amount, col_leverage = st.columns(2)
+            with col_amount:
+                amount = st.number_input("Montant ($):", min_value=100, max_value=100000, value=1000, step=100)
+            with col_leverage:
+                leverage = st.selectbox("Effet de levier:", [1, 5, 10, 20, 50, 100], index=2)
+            
+            # Stop Loss et Take Profit
+            col_sl, col_tp = st.columns(2)
+            with col_sl:
+                stop_loss = st.number_input("Stop Loss (%):", min_value=0.1, max_value=10.0, value=2.0, step=0.1)
+            with col_tp:
+                take_profit = st.number_input("Take Profit (%):", min_value=0.1, max_value=20.0, value=5.0, step=0.1)
+            
+            # Bouton pour ouvrir la position
+            if st.button("Ouvrir Position", type="primary"):
+                current_price = self.current_data[self.current_data['symbole'] == pair]['prix'].iloc[0]
+                
+                # Simulation du résultat
+                price_change = random.uniform(-take_profit, take_profit)
+                final_price = current_price * (1 + price_change/100)
+                
+                if position_type == 'ACHAT (Long)':
+                    pnl_pct = price_change
+                else:
+                    pnl_pct = -price_change
+                
+                pnl_amount = amount * pnl_pct/100 * leverage
+                
+                # Affichage du résultat
+                st.markdown('<div class="simulator-card">', unsafe_allow_html=True)
+                st.write(f"**Position ouverte:** {position_type} {pair}")
+                st.write(f"**Prix d'entrée:** ${current_price:.4f}")
+                st.write(f"**Prix de sortie:** ${final_price:.4f}")
+                st.write(f"**Variation:** {price_change:+.2f}%")
+                st.write(f"**P&L:** ${pnl_amount:+.2f}")
+                
+                if pnl_amount > 0:
+                    st.markdown(f'<div class="profit-loss-positive">PROFIT: ${pnl_amount:+.2f}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="profit-loss-negative">PERTE: ${pnl_amount:+.2f}</div>', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.subheader("Historique des Trades")
+            
+            # Simulation d'historique
+            trade_history = []
+            for i in range(10):
+                pair = random.choice(list(self.currencies.keys()))
+                position_type = random.choice(['ACHAT', 'VENTE'])
+                pnl = random.uniform(-500, 1000)
+                
+                trade_history.append({
+                    'Paire': pair,
+                    'Type': position_type,
+                    'P&L': f"${pnl:+.2f}",
+                    'Résultat': 'Profit' if pnl > 0 else 'Perte'
+                })
+            
+            history_df = pd.DataFrame(trade_history)
+            st.dataframe(history_df, use_container_width=True)
+            
+            # Statistiques
+            total_trades = len(trade_history)
+            winning_trades = len([t for t in trade_history if t['Résultat'] == 'Profit'])
+            win_rate = (winning_trades / total_trades) * 100
+            
+            st.metric("Total Trades", total_trades)
+            st.metric("Taux de réussite", f"{win_rate:.1f}%")
+    
+    def create_market_sentiment(self):
+        """Analyse du sentiment du marché"""
+        st.markdown('<h3 class="section-header">💭 SENTIMENT DU MARCHÉ</h3>', 
+                   unsafe_allow_html=True)
+        
+        tab1, tab2, tab3 = st.tabs(["Sentiment Global", "Fear & Greed Index", "Actualités"])
+        
+        with tab1:
+            # Sentiment par devise
+            sentiment_data = []
+            for symbole in self.currencies.keys():
+                sentiment_score = random.uniform(-1, 1)
+                if sentiment_score > 0.3:
+                    sentiment = 'HAUSSIER'
+                elif sentiment_score < -0.3:
+                    sentiment = 'BAISSIER'
+                else:
+                    sentiment = 'NEUTRE'
+                
+                sentiment_data.append({
+                    'Symbole': symbole,
+                    'Sentiment': sentiment,
+                    'Score': sentiment_score
+                })
+            
+            sentiment_df = pd.DataFrame(sentiment_data)
+            
+            # Graphique du sentiment
+            fig = px.bar(sentiment_df.head(20), 
+                        x='Symbole', 
+                        y='Score',
+                        color='Score',
+                        title='Sentiment du Marché par Paire de Devises',
+                        color_continuous_scale='RdYlGn')
+            fig.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Répartition des sentiments
+            sentiment_counts = sentiment_df['Sentiment'].value_counts()
+            fig = px.pie(values=sentiment_counts.values, 
+                        names=sentiment_counts.index,
+                        title='Répartition des Sentiments')
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab2:
-            st.subheader("Scénarios de Stress Test")
+            st.subheader("Fear & Greed Index")
             
-            col1, col2 = st.columns(2)
+            # Simulation de l'index
+            fear_greed_value = random.randint(0, 100)
             
-            with col1:
-                st.markdown("""
-                ### 📉 Scénario Dégradé
-                
-                **Hypothèses:**
-                - Récession mondiale profonde
-                - USD +15% (valeur refuge)
-                - Chute des matières premières
-                - Crise bancaire européenne
-                
-                **Impacts:**
-                - EUR/USD: -12%
-                - GBP/USD: -15%
-                - AUD/USD: -20%
-                - USD/JPY: +8%
-                - USD/CHF: +10%
-                
-                **Probabilité:** 20%
-                """)
+            if fear_greed_value < 25:
+                sentiment = "PEUR EXTREME"
+                color = "red"
+                advice = "Opportunité d'achat potentielle"
+            elif fear_greed_value < 45:
+                sentiment = "PEUR"
+                color = "orange"
+                advice = "Marché prudent"
+            elif fear_greed_value < 55:
+                sentiment = "NEUTRE"
+                color = "gray"
+                advice = "Marché équilibré"
+            elif fear_greed_value < 75:
+                sentiment = "CUPIDITÉ"
+                color = "lightgreen"
+                advice = "Surveillance requise"
+            else:
+                sentiment = "CUPIDITÉ EXTREME"
+                color = "green"
+                advice = "Risque de correction élevé"
             
-            with col2:
-                st.markdown("""
-                ### 📈 Scénario Optimiste
-                
-                **Hypothèses:**
-                - Croissance robuste mondiale
-                - USD -10%
-                - Hausse des matières premières
-                - Apaisement géopolitique
-                
-                **Impacts:**
-                - EUR/USD: +10%
-                - GBP/USD: +12%
-                - AUD/USD: +15%
-                - USD/JPY: -8%
-                - USD/CHF: -7%
-                
-                **Probabilité:** 25%
-                """)
+            # Affichage de l'index
+            st.markdown(f"""
+            <div style="text-align: center; padding: 2rem;">
+                <h2>Fear & Greed Index</h2>
+                <div style="font-size: 4rem; font-weight: bold; color: {color};">
+                    {fear_greed_value}
+                </div>
+                <h3 style="color: {color};">{sentiment}</h3>
+                <p><strong>Conseil:</strong> {advice}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Historique de l'index
+            dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
+            values = [random.randint(0, 100) for _ in range(30)]
+            
+            fig = px.line(x=dates, y=values, title='Évolution du Fear & Greed Index (30 jours)')
+            fig.add_hline(y=50, line_dash="dash", line_color="gray", annotation_text="Neutre")
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab3:
-            st.subheader("Stratégies de Couverture")
+            st.subheader("Actualités du Marché")
             
-            st.markdown("""
-            ### 🛡️ Instruments de Couverture
+            # Simulation d'actualités
+            news = [
+                {
+                    'Titre': 'Fed maintient les taux intouchables, signal hawkish',
+                    'Heure': 'Il y a 2 heures',
+                    'Impact': 'Élevé',
+                    'Source': 'Reuters'
+                },
+                {
+                    'Titre': 'L\'Euro rebondit suite aux commentaires de la BCE',
+                    'Heure': 'Il y a 4 heures',
+                    'Impact': 'Moyen',
+                    'Source': 'Bloomberg'
+                },
+                {
+                    'Titre': 'Le Yen japonais atteint son plus bas niveau',
+                    'Heure': 'Il y a 6 heures',
+                    'Impact': 'Élevé',
+                    'Source': 'Financial Times'
+                },
+                {
+                    'Titre': 'La Banque d\'Angleterre adopte une posture attentiste',
+                    'Heure': 'Il y a 8 heures',
+                    'Impact': 'Moyen',
+                    'Source': 'CNBC'
+                },
+                {
+                    'Titre': 'Les devises émergentes sous pression',
+                    'Heure': 'Il y a 12 heures',
+                    'Impact': 'Faible',
+                    'Source': 'WSJ'
+                }
+            ]
             
-            **📊 Forex Spot:**
-            - Transactions immédiates
-            - Liquidité maximale
-            - Spread variable selon les paires
-            
-            **🔄 Forex Forward:**
-            - Taux fixé à l'avance
-                - Protection contre la volatilité
-            - Maturités personnalisables
-            
-            **⚖️ Options de Devises:**
-            - Protection asymétrique
-            - Prime à payer
-            - Flexibilité stratégique
-            - Calls/Puts selon le scénario
-            
-            **💱 ETF de Devises:**
-            - Exposition simplifiée
-            - Liquidité quotidienne
-            - Frais modérés
-            - ETF inversés disponibles
-            
-            **📊 Contrats Futures:**
-            - Marchés organisés
-            - Standardisation
-            - Effet de levier possible
-            """)
+            for article in news:
+                impact_color = {
+                    'Élevé': 'red',
+                    'Moyen': 'orange',
+                    'Faible': 'green'
+                }
+                
+                st.markdown(f"""
+                <div style="border: 1px solid #ddd; padding: 1rem; margin: 0.5rem 0; border-radius: 5px;">
+                    <h4>{article['Titre']}</h4>
+                    <p style="color: gray; font-size: 0.9rem;">
+                        {article['Source']} • {article['Heure']} • 
+                        <span style="color: {impact_color[article['Impact']]}; font-weight: bold;">
+                            Impact {article['Impact']}
+                        </span>
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
     
-    def create_sidebar(self):
-        """Crée la sidebar avec les contrôles"""
-        st.sidebar.markdown("## 🎛️ CONTRÔLES D'ANALYSE")
+    def display_correlation_matrix(self):
+        """Affiche la matrice de corrélation"""
+        st.markdown('<h3 class="section-header">🔗 MATRICE DE CORRÉLATION</h3>', 
+                   unsafe_allow_html=True)
         
-        # Catégories à afficher
-        st.sidebar.markdown("### 🏷️ Catégories à surveiller")
-        categories = list(self.current_data['categorie'].unique())
-        categories_selectionnees = st.sidebar.multiselect(
-            "Sélectionnez les catégories:",
-            categories,
-            default=categories
-        )
+        # Préparation des données pour la corrélation
+        pivot_data = self.historical_data.pivot(index='date', columns='symbole', values='prix')
         
-        # Période d'analyse
-        st.sidebar.markdown("### 📅 Période d'analyse")
-        date_debut = st.sidebar.date_input("Date de début", 
-                                         value=datetime.now() - timedelta(days=365))
-        date_fin = st.sidebar.date_input("Date de fin", 
-                                       value=datetime.now())
+        # Calcul de la corrélation sur les rendements
+        returns_data = pivot_data.pct_change().dropna()
+        correlation_matrix = returns_data.corr()
         
-        # Options d'analyse
-        st.sidebar.markdown("### ⚙️ Options d'analyse")
-        auto_refresh = st.sidebar.checkbox("Rafraîchissement automatique", value=True)
-        show_advanced = st.sidebar.checkbox("Indicateurs avancés", value=True)
-        alert_threshold = st.sidebar.slider("Seuil d'alerte (%)", 0.5, 5.0, 1.5)
+        # Sélection des paires principales pour la visualisation
+        major_pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD']
+        available_pairs = [pair for pair in major_pairs if pair in correlation_matrix.columns]
         
-        # Bouton de rafraîchissement
-        if st.sidebar.button("🔄 Rafraîchir les données"):
-            self.update_live_data()
-            st.rerun()
+        if available_pairs:
+            selected_correlation = correlation_matrix[available_pairs].loc[available_pairs]
+            
+            # Création de la heatmap
+            fig = px.imshow(selected_correlation,
+                           text_auto=True,
+                           aspect="auto",
+                           title="Matrice de Corrélation des Paires Majeures",
+                           color_continuous_scale='RdBu_r',
+                           range_color=[-1, 1])
+            st.plotly_chart(fig, use_container_width=True)
         
-        # Alertes en temps réel
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 🔔 ALERTES EN TEMPS RÉEL")
+        # Analyse des corrélations fortes
+        st.subheader("Analyse des Corrélations Fortes")
         
-        for _, currency in self.current_data.iterrows():
-            if abs(currency['change_pct']) > alert_threshold:
-                alert_type = "warning" if currency['change_pct'] > 0 else "error"
-                if alert_type == "warning":
-                    st.sidebar.warning(
-                        f"{currency['icone']} {currency['symbole']}: "
-                        f"{currency['change_pct']:+.2f}%"
-                    )
-                else:
-                    st.sidebar.error(
-                        f"{currency['icone']} {currency['symbole']}: "
-                        f"{currency['change_pct']:+.2f}%"
-                    )
+        # Trouver les corrélations les plus fortes
+        corr_pairs = []
+        for i in range(len(correlation_matrix.columns)):
+            for j in range(i+1, len(correlation_matrix.columns)):
+                pair1 = correlation_matrix.columns[i]
+                pair2 = correlation_matrix.columns[j]
+                corr_value = correlation_matrix.iloc[i, j]
+                
+                if abs(corr_value) > 0.7:  # Corrélation forte
+                    corr_pairs.append({
+                        'Paire 1': pair1,
+                        'Paire 2': pair2,
+                        'Corrélation': corr_value
+                    })
         
-        return {
-            'categories_selectionnees': categories_selectionnees,
-            'date_debut': date_debut,
-            'date_fin': date_fin,
-            'auto_refresh': auto_refresh,
-            'show_advanced': show_advanced,
-            'alert_threshold': alert_threshold
-        }
-
-    def run_dashboard(self):
-        """Exécute le dashboard complet"""
-        # Mise à jour des données
-        self.update_live_data()
-        
-        # Sidebar
-        controls = self.create_sidebar()
-        
-        # Header
+        if corr_pairs:
+            corr_df = pd.DataFrame(corr_pairs).sort_values('Corrélation', key=abs, ascending=False)
+            st.dataframe(corr_df.head(10), use_container_width=True)
+        else:
+            st.info("Aucune corrélation forte (> 0.7) détectée actuellement.")
+    
+    def run(self):
+        """Fonction principale pour exécuter le dashboard"""
+        # Affichage de l'en-tête
         self.display_header()
         
-        # Cartes de devises
-        self.display_currency_cards()
+        # Menu de navigation dans la sidebar
+        st.sidebar.title("Navigation")
+        page = st.sidebar.selectbox(
+            "Choisissez une section:",
+            [
+                "📊 Vue d'ensemble",
+                "💰 Taux de change",
+                "📈 Analyse historique",
+                "🏦 Banques centrales",
+                "🔬 Analyse technique",
+                "🎮 Simulateur de trading",
+                "💭 Sentiment du marché",
+                "🔗 Corrélations"
+            ]
+        )
         
-        # Métriques clés
-        self.display_key_metrics()
+        # Options de rafraîchissement
+        st.sidebar.subheader("Options de rafraîchissement")
+        auto_refresh = st.sidebar.checkbox("Rafraîchissement automatique", value=True)
         
-        # Navigation par onglets
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-            "📈 Vue d'Ensemble", 
-            "🏦 Banques Centrales", 
-            "🔬 Technique", 
-            "🌍 Marchés", 
-            "⚠️ Risques", 
-            "💡 Insights"
-        ])
+        if auto_refresh:
+            refresh_interval = st.sidebar.slider("Intervalle (secondes):", 5, 60, 10)
         
-        with tab1:
+        # Affichage de la page sélectionnée
+        if page == "📊 Vue d'ensemble":
+            self.display_key_metrics()
+            self.display_currency_cards()
+            
+        elif page == "💰 Taux de change":
+            self.display_currency_cards()
+            
+        elif page == "📈 Analyse historique":
             self.create_price_overview()
-        
-        with tab2:
+            
+        elif page == "🏦 Banques centrales":
             self.create_central_bank_analysis()
-        
-        with tab3:
+            
+        elif page == "🔬 Analyse technique":
             self.create_technical_analysis()
+            
+        elif page == "🎮 Simulateur de trading":
+            self.create_trading_simulator()
+            
+        elif page == "💭 Sentiment du marché":
+            self.create_market_sentiment()
+            
+        elif page == "🔗 Corrélations":
+            self.display_correlation_matrix()
         
-        with tab4:
-            self.create_market_analysis()
-        
-        with tab5:
-            self.create_risk_analysis()
-        
-        with tab6:
-            st.markdown("## 💡 INSIGHTS STRATÉGIQUES")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("""
-                ### 🎯 TENDANCES DES DEVISES
-                
-                **🇺🇸 Dollar Américain:**
-                - Renforcement attendu Q3 2024
-                - Taux élevés maintenus par la Fed
-                - Valeur refuge en cas de tensions
-                
-                **🇪🇺 Euro:**
-                - Faiblesse structurelle à moyen terme
-                - Politique monétaire plus accommodante
-                - Risques géopolitiques en Europe
-                
-                **🇬🇧 Livre Sterling:**
-                - Volatilité élevée attendue
-                - Impact des données économiques britanniques
-                - Sensible aux négociations post-Brexit
-                
-                **🇯🇵 Yen Japonais:**
-                - Intervention possible si faiblesse extrême
-                - Politique monétaire toujours très accommodante
-                - Pressions inflationnistes grandissantes
-                """)
-            
-            with col2:
-                st.markdown("""
-                ### 📊 OPPORTUNITÉS DE TRADING
-                
-                **🔺 Paires à surveiller (Haussières):**
-                - EUR/GBP: Divergence des politiques monétaires
-                - AUD/USD: Reprise chinoise possible
-                - NZD/JPY: Carry trade attractif
-                
-                **🔻 Paires à surveiller (Baissières):**
-                - GBP/JPY: Volatilité élevée
-                - EUR/CHF: Pression sur le franc
-                - USD/SEK: Taux suédois plus bas
-                
-                ### 📈 STRATÉGIES RECOMMANDÉES
-                
-                **🔄 Carry Trade:**
-                - Vendre JPY, CHF contre AUD, NZD
-                - Surveiller les interventions des banques centrales
-                
-                **📊 Breakout Trading:**
-                - Surveiller EUR/USD près de 1.0750
-                - GBP/USD près de 1.2750
-                
-                **⚖️ Paires Corrélées:**
-                - EUR/USD vs GBP/USD
-                - AUD/USD vs NZD/USD
-                """)
-            
-            st.markdown("---")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown("""
-                ### 📅 ÉVÉNEMENTS CLÉS À SURVEILLER
-                
-                **Juin 2024:**
-                - Réunion Fed (12)
-                - Réunion BCE (6)
-                - Réunion BoJ (14)
-                - Réunion BoE (20)
-                
-                **Juillet 2024:**
-                - Réunion Fed (31)
-                - Réunion BoJ (31)
-                - Réunion RBA (2)
-                """)
-            
-            with col2:
-                st.markdown("""
-                ### 📊 INDICATEURS ÉCONOMIQUES IMPORTANTS
-                
-                **USA:**
-                - CPI (inflation)
-                - Non-Farm Payrolls
-                - PIB trimestriel
-                
-                **Zone Euro:**
-                - CPI
-                - PIB
-                - IFO (Allemagne)
-                
-                **Royaume-Uni:**
-                - CPI
-                - PIB
-                - Chômage
-                """)
-            
-            with col3:
-                st.markdown("""
-                ### 🌐 FACTEURS GÉOPOLITIQUES
-                
-                **Tensions à surveiller:**
-                - Conflit Ukraine-Russie
-                - Tensions Moyen-Orient
-                - Relations sino-américaines
-                - Élections dans les grands pays
-                
-                **Impact potentiel:**
-                - Volatilité accrue
-                - Mouvements de valeur refuge
-                - Interventions des banques centrales
-                """)
+        # Rafraîchissement automatique
+        if auto_refresh:
+            time.sleep(refresh_interval)
+            st.rerun() # <--- LIGNE CORRIGÉE
 
-# Lancement du dashboard
+# Point d'entrée principal
 if __name__ == "__main__":
     dashboard = ForexDashboard()
-    dashboard.run_dashboard()
+    dashboard.run()
